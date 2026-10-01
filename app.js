@@ -4,7 +4,7 @@ let recognition=null,recording=false,source="mic",finalText="",audioStream=null,
 
 const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 function setStatus(t,live=false){$("#statusText").textContent=t;document.querySelector(".recording-indicator").classList.toggle("live",live)}
-function appendFinal(t){if(!t.trim())return;finalText+=(finalText?" ":"")+t.trim();transcriptEl.textContent=finalText}
+function appendFinal(t){if(!t.trim())return;const speaker=source==="device"?"Speaker 2":"Speaker 1";transcriptSegments.push({id:crypto.randomUUID(),speaker,start_ms:Date.now(),end_ms:null,language:$("#dialect").value,text:t.trim(),confidence:null,final:true});finalText+=(finalText?" ":"")+t.trim();transcriptEl.textContent=finalText;renderSpeakerMap()}
 function appendInterim(t){transcriptEl.textContent=finalText+(finalText?" ":"")+t.trim();transcriptEl.scrollTop=transcriptEl.scrollHeight}
 
 function setupRecognition(){
@@ -18,7 +18,7 @@ async function start(){
  if(recording)return;recording=true;$("#startBtn").disabled=true;$("#stopBtn").disabled=false;setStatus("جاري التسجيل والتفريغ…",true);
  try{
   audioStream=source==="mic"?await navigator.mediaDevices.getUserMedia({audio:true}):await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
-  audioChunks=[];recorder=new MediaRecorder(audioStream);recorder.ondataavailable=e=>{if(e.data.size)audioChunks.push(e.data)};recorder.start(1000);recognition=setupRecognition();if(recognition)recognition.start();
+  audioChunks=[];recorder=new MediaRecorder(audioStream);recorder.ondataavailable=e=>{if(e.data.size)audioChunks.push(e.data)};recorder.start(1000);recognition=setupRecognition();if(recognition){try{source==="device"&&audioStream.getAudioTracks()[0]?recognition.start(audioStream.getAudioTracks()[0]):recognition.start()}catch(_){recognition.start()}}
  }catch(e){recording=false;$("#startBtn").disabled=false;$("#stopBtn").disabled=true;setStatus("لم يتم تشغيل التسجيل");alert("تعذر الوصول للصوت: "+e.message)}
 }
 async function uploadRecording(){if(!audioChunks.length)return;try{const health=await fetch("/api/health").then(r=>r.json());if(health.transcriptionProvider!=="remote")return;const blob=new Blob(audioChunks,{type:recorder?.mimeType||"audio/webm"});const form=new FormData();form.append("audio",blob,"meeting-"+sessionId+".webm");form.append("session_id",sessionId);form.append("language_mode",$("#language").value);form.append("dialect_hint",$("#dialect").value);const r=await fetch("/api/transcribe",{method:"POST",body:form});if(!r.ok)throw new Error(await r.text());const data=await r.json();if(Array.isArray(data.segments)){transcriptSegments=data.segments;renderSpeakerMap();renderTranscriptSegments();}}catch(e){console.error("Transcription upload failed",e)}}
@@ -41,7 +41,7 @@ async function buildSummary(){
  const list=signals.length?signals.map(x=>"<li>"+esc(x)+"</li>").join(""):"<li>لم يتم استخراج إشارات تلقائياً — راجع النص الكامل.</li>";
  const box=$("#summary");box.classList.remove("empty");
  box.innerHTML="<div class='summary-grid'>"+
- "<div class='kv'><strong>الاجتماع</strong>"+esc(meta.meeting)+"</div>"+
+ "<div class='kv'><strong>الاجتماع</strong>"+esc(meta.title)+"</div>"+
  "<div class='kv'><strong>الشركة</strong>"+esc(meta.company)+"</div>"+
  "<div class='kv'><strong>المجال</strong>"+esc(meta.industry)+"</div>"+
  "<div class='kv'><strong>الحاضرون</strong>"+esc(meta.attendees)+"</div></div>"+
