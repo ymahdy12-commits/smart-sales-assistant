@@ -51,6 +51,32 @@ async function buildSummary(){
 }
 function renderSpeakerMap(){const el=$("#speakerMap");const speakers=[...new Set(transcriptSegments.map(s=>s.speaker).filter(Boolean))];if(!speakers.length){el.innerHTML="<p class='hint'>لا توجد بيانات Speaker بعد.</p>";return}el.innerHTML=speakers.map(sp=>"<label>"+esc(sp)+"<input data-speaker='"+esc(sp)+"' placeholder='اسم الشخص (اختياري)'></label>").join("");el.querySelectorAll("input").forEach(i=>i.oninput=()=>{speakerNames[i.dataset.speaker]=i.value.trim()})}
 function renderTranscriptSegments(){finalText=transcriptSegments.map(s=>s.text).join(" ").trim();transcriptEl.innerHTML=transcriptSegments.map(s=>"<div><strong>"+esc(speakerNames[s.speaker]||s.speaker||"Speaker")+" </strong>"+esc(s.text)+"</div>").join("")}
-function renderApiSummary(data,meta){const box=$("#summary");box.classList.remove("empty");const arr=v=>Array.isArray(v)?v:["Not mentioned"];const section=(title,v)=>"<h4>"+esc(title)+"</h4><ul>"+arr(v).map(x=>"<li>"+esc(typeof x==="string"?x:JSON.stringify(x))+"</li>").join("")+"</ul>";box.innerHTML="<div class=\"summary-grid\"><div class=\"kv\"><strong>الاجتماع</strong>"+esc(meta.title)+"</div><div class=\"kv\"><strong>الشركة</strong>"+esc(meta.company)+"</div><div class=\"kv\"><strong>المجال</strong>"+esc(meta.industry)+"</div><div class=\"kv\"><strong>الحاضرون</strong>"+esc(meta.attendees)+"</div></div><h4>Executive Summary</h4><p>"+esc(data.executive_summary||"Not mentioned")+"</p>"+section("Needs",data.needs)+section("Pain Points",data.pain_points)+section("Objections",data.objections)+section("Pricing & Budget",data.pricing_and_budget)+section("Competitors",data.competitors)+section("Decisions",data.decisions)+section("Next Steps",data.next_steps)+section("CRM Summary",data.crm_summary? [data.crm_summary]:[])+"<h4>Follow-up Message</h4><p>"+esc(data.follow_up_message||"Not generated")+"</p>"}
+function renderApiSummary(data,meta){
+ const box=$("#summary");box.classList.remove("empty");
+ const value=v=>{if(v===undefined||v===null||v===""||(Array.isArray(v)&&!v.length))return ["Not mentioned"];return Array.isArray(v)?v:[v]};
+ const fmt=v=>typeof v==="string"?v:JSON.stringify(v,null,2);
+ const section=(title,v)=>"<div class='summary-section'><h4>"+esc(title)+"</h4><ul>"+value(v).map(x=>"<li>"+esc(fmt(x))+"</li>").join("")+"</ul></div>";
+ const details="<div class='summary-grid'><div class='kv'><strong>الاجتماع</strong>"+esc(meta.title)+"</div><div class='kv'><strong>الشركة</strong>"+esc(meta.company)+"</div><div class='kv'><strong>المجال</strong>"+esc(meta.industry)+"</div><div class='kv'><strong>الحاضرون</strong>"+esc(meta.attendees)+"</div></div>";
+ box.innerHTML=details+
+ section("Executive Summary",data.executive_summary)+
+ section("Meeting Details",data.meeting_details)+
+ section("Participants",data.participants)+
+ section("Customer Context",data.customer_context)+
+ section("Needs",data.needs)+
+ section("Pain Points",data.pain_points)+
+ section("Requirements",data.requirements)+
+ section("Objections & Responses",data.objections)+
+ section("Pricing & Budget",data.pricing_and_budget)+
+ section("Competitors / Alternatives",data.competitors)+
+ section("Buying Signals",data.buying_signals)+
+ section("Risk Signals",data.risk_signals)+
+ section("Decision Maker / Authority",data.decision_maker||data.authority)+
+ section("Timeline / Urgency",data.timeline||data.urgency)+
+ section("Decisions & Agreements",data.decisions)+
+ section("Open Questions",data.open_questions)+
+ section("Next Steps",data.next_steps)+
+ section("CRM Summary",data.crm_summary)+
+ section("Follow-up Message",data.follow_up_message);
+}
 $("#summaryBtn").onclick=buildSummary;
 document.querySelectorAll("[data-ui-lang]").forEach(b=>b.onclick=()=>{document.documentElement.lang=b.dataset.uiLang;document.documentElement.dir=b.dataset.uiLang==="ar"?"rtl":"ltr";document.querySelectorAll("[data-ui-lang]").forEach(x=>x.classList.remove("active"));b.classList.add("active")});
