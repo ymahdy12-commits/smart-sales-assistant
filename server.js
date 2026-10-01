@@ -36,6 +36,31 @@ function extractSignals(text) {
   return result;
 }
 
+function ensureArray(v){return Array.isArray(v)&&v.length?v:["Not mentioned"];}
+function evidenceItem(text,evidence){return {text:text||"Not mentioned",evidence:evidence||"Not mentioned"};}
+function buildEnhancedMockSummary(body){
+ const base=buildMockSummary(body), transcript=String(body.transcript||""), segments=Array.isArray(body.segments)?body.segments:[];
+ const customerSegments=segments.filter(s=>/customer|client|speaker 1|speaker 2/i.test(String(s.speaker||"")));
+ const chronological=segments.length?segments.map(s=>({speaker:s.speaker||"Speaker",start_ms:s.start_ms??"Not mentioned",text:s.text||"Not mentioned"})):splitSentences(transcript).map((text,i)=>({speaker:"Not mentioned",start_ms:"Not mentioned",text}));
+ return {...base,
+  customer_context:{current_situation:"Not mentioned",business_model:"Not mentioned",marketing_sales_setup:"Not mentioned",existing_tools:"Not mentioned",current_provider:"Not mentioned",previous_attempts:"Not mentioned",desired_outcome:"Not mentioned"},
+  needs:ensureArray(base.needs).map(x=>evidenceItem(x, x==="Not mentioned"?"Not mentioned":x)),
+  pain_points:ensureArray(base.pain_points).map(x=>evidenceItem(x, x==="Not mentioned"?"Not mentioned":x)),
+  objections:ensureArray(base.objections).map(x=>({objection:x,response:"Not mentioned",evidence:x})),
+  pricing_and_budget:{budget:"Not mentioned",pricing_discussed:"Not mentioned",price_sensitivity:"Not mentioned",scope:"Not mentioned",payment_constraints:"Not mentioned"},
+  competitors:ensureArray(base.competitors),
+  decision_maker:"Not mentioned",authority:"Not mentioned",urgency:"Not mentioned",timeline:"Not mentioned",buying_stage:"Not mentioned",
+  buying_signals:[].concat(base.buying_signals||[]),risk_signals:[].concat(base.risk_signals||[]),
+  agreements:["Not mentioned"],disagreements:["Not mentioned"],open_questions:["Not mentioned"],
+  chronological_summary:chronological,
+  customer_statements:customerSegments.length?customerSegments.map(s=>s.text):["Not mentioned"],
+  customer_questions:["Not mentioned"],salesperson_questions:["Not mentioned"],responses_given:["Not mentioned"],
+  next_steps:[{owner:"Not mentioned",action:"Not mentioned",deadline:"Not mentioned"}],
+  crm_summary:base.crm_summary,
+  follow_up_message:base.follow_up_message
+ };
+}
+
 function buildMockSummary(body) {
   const meeting = body.meeting || {};
   const transcript = String(body.transcript || "");
@@ -92,7 +117,7 @@ app.post("/api/sales-summary", async (req, res) => {
     if ((process.env.SUMMARY_PROVIDER || "mock") === "remote") {
       return res.json(await remoteJSON(process.env.SUMMARY_ENDPOINT, process.env.SUMMARY_API_KEY, { meeting:req.body.meeting || {}, transcript:req.body.transcript || "", segments:req.body.segments || [] }));
     }
-    res.json(buildMockSummary(req.body));
+    res.json(buildEnhancedMockSummary(req.body));
   } catch (error) { res.status(502).json({ error:error.message }); }
 });
 
