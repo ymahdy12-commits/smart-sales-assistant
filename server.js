@@ -7,6 +7,10 @@ const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+const app = express();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PORT = Number(process.env.PORT || 3000);
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 const OPENAI_BASE = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
 const OPENAI_KEY = process.env.OPENAI_API_KEY || "";
 
@@ -88,31 +92,6 @@ function buildMockSummary(body) {
   };
 }
 
-async function openAITranscribe(file, body){
- if(!OPENAI_KEY) throw new Error("OPENAI_API_KEY is not configured.");
- const form=new FormData();
- form.append("file",new Blob([file.buffer],{type:file.mimetype||"audio/webm"}),file.originalname||"meeting.webm");
- form.append("model",process.env.OPENAI_STT_MODEL||"gpt-4o-transcribe");
- form.append("response_format",process.env.OPENAI_STT_RESPONSE_FORMAT||"json");
- if(body.language_mode && body.language_mode!=="auto" && body.language_mode!=="ar" && body.language_mode!=="en") form.append("language",body.language_mode);
- const r=await fetch(OPENAI_BASE+"/audio/transcriptions",{method:"POST",headers:{Authorization:"Bearer "+OPENAI_KEY},body:form});
- const raw=await r.text(); if(!r.ok) throw new Error("OpenAI transcription failed: "+raw.slice(0,800));
- const data=JSON.parse(raw);
- if(Array.isArray(data.segments)){
-  return {provider:"openai",segments:data.segments.map((s,i)=>({id:String(s.id??i),speaker:s.speaker||"Speaker "+((i%2)+1),start_ms:Math.round(Number(s.start||0)*1000),end_ms:Math.round(Number(s.end||0)*1000),language:s.language||body.language_mode||"auto",text:s.text||"",confidence:s.confidence??null,final:true}))};
- }
- return {provider:"openai",segments:[{id:"openai-1",speaker:"Speaker 1",start_ms:0,end_ms:null,language:body.language_mode||"auto",text:data.text||"",confidence:null,final:true}]};
-}
-async function openAISummary(body){
- if(!OPENAI_KEY) throw new Error("OPENAI_API_KEY is not configured.");
- const prompt=JSON.stringify({meeting:body.meeting||{},segments:body.segments||[],transcript:body.transcript||{}});
- const instructions="You are a sales meeting intelligence engine. Return ONLY valid JSON. Extract only facts supported by the meeting. Never invent names, budgets, dates, competitors, decision makers, or commitments. Missing information must be exactly \"Not mentioned\". Buying signals, risk signals, objections, and important commercial facts must include evidence. Preserve Arabic/English meaning. Produce fields: executive_summary, meeting_details, participants, customer_context, needs, pain_points, requirements, objections, pricing_and_budget, competitors, decision_maker, authority, urgency, timeline, buying_stage, buying_signals, risk_signals, decisions, agreements, disagreements, open_questions, chronological_summary, customer_statements, customer_questions, salesperson_questions, responses_given, next_steps, crm_summary, follow_up_message.";
- const r=await fetch(OPENAI_BASE+"/responses",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+OPENAI_KEY},body:JSON.stringify({model:process.env.OPENAI_SUMMARY_MODEL||"gpt-5.6-luna",instructions,input:prompt,text:{format:{type:"json_object"}}})});
- const raw=await r.text(); if(!r.ok) throw new Error("OpenAI summary failed: "+raw.slice(0,800));
- const data=JSON.parse(raw);
- const output=data.output_text||data.output?.flatMap(x=>x.content||[]).map(x=>x.text||"").join("")||"{}";
- return JSON.parse(output);
-}
 async function remoteJSON(endpoint, apiKey, payload) {
   if (!endpoint) throw new Error("Provider endpoint is not configured.");
   const response = await fetch(endpoint, {
@@ -128,7 +107,6 @@ async function remoteJSON(endpoint, apiKey, payload) {
 app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error:"audio file is required" });
-    if ((process.env.STT_PROVIDER || "mock") === "openai") { return res.json(await openAITranscribe(req.file, req.body)); }
     if ((process.env.STT_PROVIDER || "mock") === "remote") {
       return res.json(await remoteJSON(process.env.STT_ENDPOINT, process.env.STT_API_KEY, {
         audio_base64:req.file.buffer.toString("base64"), mime_type:req.file.mimetype,
@@ -142,7 +120,6 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
 
 app.post("/api/sales-summary", async (req, res) => {
   try {
-    if ((process.env.SUMMARY_PROVIDER || "mock") === "openai") { return res.json(await openAISummary(req.body)); }
     if ((process.env.SUMMARY_PROVIDER || "mock") === "remote") {
       return res.json(await remoteJSON(process.env.SUMMARY_ENDPOINT, process.env.SUMMARY_API_KEY, { meeting:req.body.meeting || {}, transcript:req.body.transcript || "", segments:req.body.segments || [] }));
     }
