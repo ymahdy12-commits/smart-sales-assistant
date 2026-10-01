@@ -1,6 +1,6 @@
 const $=s=>document.querySelector(s);
 const transcriptEl=$("#transcript");
-let recognition=null,recording=false,source="mic",finalText="",audioStream=null,recorder=null,audioChunks=[],sessionId=crypto.randomUUID();
+let recognition=null,recording=false,source="mic",finalText="",audioStream=null,recorder=null,audioChunks=[],transcriptSegments=[],sessionId=crypto.randomUUID();
 
 const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 function setStatus(t,live=false){$("#statusText").textContent=t;document.querySelector(".recording-indicator").classList.toggle("live",live)}
@@ -21,7 +21,7 @@ async function start(){
   audioChunks=[];recorder=new MediaRecorder(audioStream);recorder.ondataavailable=e=>{if(e.data.size)audioChunks.push(e.data)};recorder.start(1000);recognition=setupRecognition();if(recognition)recognition.start();
  }catch(e){recording=false;$("#startBtn").disabled=false;$("#stopBtn").disabled=true;setStatus("لم يتم تشغيل التسجيل");alert("تعذر الوصول للصوت: "+e.message)}
 }
-async function uploadRecording(){if(!audioChunks.length)return;try{const health=await fetch("/api/health").then(r=>r.json());if(health.transcriptionProvider!=="remote")return;const blob=new Blob(audioChunks,{type:recorder?.mimeType||"audio/webm"});const form=new FormData();form.append("audio",blob,"meeting-"+sessionId+".webm");form.append("session_id",sessionId);form.append("language_mode",$("#language").value);form.append("dialect_hint",$("#dialect").value);const r=await fetch("/api/transcribe",{method:"POST",body:form});if(!r.ok)throw new Error(await r.text());const data=await r.json();if(Array.isArray(data.segments)){finalText=data.segments.map(s=>s.text).join(" ").trim();transcriptEl.textContent=finalText}}catch(e){console.error("Transcription upload failed",e)}}
+async function uploadRecording(){if(!audioChunks.length)return;try{const health=await fetch("/api/health").then(r=>r.json());if(health.transcriptionProvider!=="remote")return;const blob=new Blob(audioChunks,{type:recorder?.mimeType||"audio/webm"});const form=new FormData();form.append("audio",blob,"meeting-"+sessionId+".webm");form.append("session_id",sessionId);form.append("language_mode",$("#language").value);form.append("dialect_hint",$("#dialect").value);const r=await fetch("/api/transcribe",{method:"POST",body:form});if(!r.ok)throw new Error(await r.text());const data=await r.json();if(Array.isArray(data.segments)){transcriptSegments=data.segments;finalText=data.segments.map(s=>s.text).join(" ").trim();transcriptEl.innerHTML=data.segments.map(s=>"<div><strong>"+esc(s.speaker||"Speaker")+" </strong>"+esc(s.text)+"</div>").join("")}}catch(e){console.error("Transcription upload failed",e)}}
 function stop(){recording=false;$("#startBtn").disabled=false;$("#stopBtn").disabled=true;if(recognition){try{recognition.stop()}catch(_){}}if(recorder&&recorder.state!=="inactive")recorder.stop();setTimeout(uploadRecording,150);if(audioStream)audioStream.getTracks().forEach(t=>t.stop());setStatus("تم إيقاف التسجيل")}
 $("#startBtn").onclick=start;$("#stopBtn").onclick=stop;
 $("#micBtn").onclick=()=>{source="mic";$("#micBtn").classList.add("active");$("#deviceBtn").classList.remove("active")};
@@ -34,7 +34,7 @@ function esc(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt
 async function buildSummary(){
  const t=transcriptEl.innerText.trim();if(!t){alert("أضف transcript أولاً.");return}
  const meta={title:$("#meetingName").value||"غير محدد",company:$("#company").value||"غير محدد",industry:$("#industry").value||"غير محدد",attendees:$("#attendees").value||"غير محدد",pre_notes:$("#preNotes").value||""};
- try{const r=await fetch("/api/sales-summary",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({meeting:meta,transcript:t})});if(r.ok){const data=await r.json();renderApiSummary(data,meta);return}}catch(e){console.warn("API summary unavailable; using local fallback.",e)}
+ try{const r=await fetch("/api/sales-summary",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({meeting:meta,transcript:t,segments:transcriptSegments})});if(r.ok){const data=await r.json();renderApiSummary(data,meta);return}}catch(e){console.warn("API summary unavailable; using local fallback.",e)}
  const sentences=t.split(/(?<=[.!؟?])\s+/).filter(Boolean);
  const keys=["السعر","ميزانية","budget","price","cost","اعتراض","objection","مشكلة","problem","احتياج","need","موعد","timeline","start","يبدأ","قرار","decision","المنافس","competitor"];
  const signals=sentences.filter(x=>keys.some(k=>x.toLowerCase().includes(k.toLowerCase()))).slice(0,15);
