@@ -16,7 +16,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 function splitSentences(text) {
-  return String(text || "").split(/(?<=[.!؟?])\\s+/).map(s => s.trim()).filter(Boolean);
+  return String(text || "").split(/(?<=[.!؟?])\s+/).map(s => s.trim()).filter(Boolean);
 }
 
 function extractSignals(text) {
